@@ -11,7 +11,7 @@ T<-10+2*I[1,]+3*I[2,]+5*I[3,] # targets
 
 ### Network parameters
 NumInputs<-dim(I)[1] # number of inputs
-NumHidden<-2 # number of hidden neurons
+NumHidden<-3 # number of hidden neurons
 NumOutputs<-1 # number of outputs
 WeightsHI<-matrix(rnorm(NumHidden*(NumInputs+1),0,1),NumHidden,NumInputs+1) # bias and weights between input and hidden layers
 WeightsOH<-matrix(rnorm(NumOutputs*(NumHidden+1),0,1),NumOutputs,NumHidden+1) # bias and weights between hidden and output layers
