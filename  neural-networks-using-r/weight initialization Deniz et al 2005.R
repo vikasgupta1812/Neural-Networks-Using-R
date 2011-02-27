@@ -9,34 +9,13 @@
 I<-rbind(rnorm(100,0,1),rnorm(100,0,1),rnorm(100,0,1)) # inputs
 T<-10+2*I[1,]+3*I[2,]+5*I[3,] # targets
 
-### Network parameters
-NumInputs<-dim(I)[1] # number of inputs
+# parameters
+NumInput<-dim(I)[1] # the number of inputs is the number of rown in I
+NumOutput<-1 # keep it simple for now
 NumHidden<-2 # number of hidden neurons
-NumOutputs<-1 # number of outputs
-WeightsHI<-matrix(rnorm(NumHidden*(NumInputs),0,1),NumHidden,NumInputs) # W1: weights between input and hidden layers
-BiasHI<-rnorm(NumHidden,0,1) #b1: bias for the first layer
-WeightsOH<-matrix(rnorm(NumOutputs*(NumHidden),0,1),NumOutputs,NumHidden) # W2: weights between hidden and output layers
-BiasOH<-rnorm(NumOutputs,0,1) #b2: bias for second layer
-SumHidden<-rep(0,NumHidden) # the induced field in each hidden neuron
-SumOutput<-rep(0,NumOutputs) # the induced field in each output neuron
-DeltaH<-rep(0,NumHidden) # local gradient for hidden neurons
-DeltaO<-rep(0,NumOutputs) # local gradient for output neurons
-DeltaWHI<-matrix(0,NumHidden,NumInputs+1) # weight update matrix for the Hidden-Inputs weights
-DeltaWOH<-matrix(0,NumOutputs,NumHidden+1) # weight update matrix for the Output-Hidden weights
-Lr<-0.1 # learning rate
-Mf<-0.1 # momentum constant
-Epochs<-5000
-N<-length(T) # number of examples presented to the net
-MSEplot<-rep(0,Epochs) # I'll plot the errors later
-
-### preprocessing
-Targets<-rep(0,length(T))
-Targets<-0.9999*(T-min(T)+0.0001)/(max(T)-min(T)) # standardized outputs
-Inputs<-matrix(0,NumInputs,N) # standardized inputs
-for (i in 1:dim(Inputs)[1]){
-	Inputs[i,]<-(I[i,]-min(I[i,]))/(max(I[i,])-min(I[i,]))
-}
-HiddenInput<-rbind(1,Inputs)
+WeightsOH<-matrix(rnorm(NumOutput*(NumHidden+1),0,1),NumOutput,NumHidden+1) # weights and bias for the output-hidden layer
+WeightsHI<-matrix(rnorm(NumHidden*(NumInput+1),0,1),NumHidden,NumInput+1)  # weights and bias for the hidden-input layer
+N<-length(T) # number of samples
 
 ### Sigmoid Function
 phi<-function(v){
@@ -51,54 +30,116 @@ inversephi<-function(v){
 	log(v/(1-v))
 }
 
-### Weight Initialization
 
-## Step 1
+### preprocessing
+Targets<-rep(0,length(T))
+Targets<-(T-min(T))/(max(T)-min(T)) # standardized outputs
+Inputs<-matrix(0,NumInput,N) # standardized inputs
+for (i in 1:dim(Inputs)[1]){
+	Inputs[i,]<-(I[i,]-min(I[i,]))/(max(I[i,])-min(I[i,]))
+}
+
+##########################
+# Weights initialization #
+##########################
+
+# Step 0 #
+xs<-Inputs
 d2<-Targets
+W1<-WeightsHI[,-1]
+b1<-WeightsHI[,1]
+W2<-WeightsOH[,-1]
+b2<-WeightsOH[,1]
+z1<-W1%*%xs+b1
+y1<-phi(z1)
+z2<-W2%*%y1+b2
+y2<-phi(z2)
+Jopt<-sum(t(d2-y2)%*%(d2-y2))/(2*N)
+W1opt<-W1
+b1opt<-b1
+W2opt<-W2
+b2opt<-b2
+
+# Step 1 #
+d2[d2==1]<-1-1e-3;d2[d2==0]<-1e-3
 d2bar<-inversephi(d2)
 
-## Step 2
-d1<-matrix(0,NumHidden,N)
-for (i in 1:N){
-	d1[,i]<-qr.solve(WeightsOH,(d2bar-BiasOH)[i])	
-}
-L<-matrix(c(1/(max(d1[1,]-min(d1[1,]))),0,0,1),2)  # set by hand for now
-S<-rep(0.4,N)
-d1<-L%*%d1+S
-d1[d1>=1]<-0.99999;d1[d1<=0]<-0.00001 #gambiarra
-
-## Step 3
-d1bar<-inversephi(d1)
-
-## Step 4
-W1opt<-matrix(0,NumHidden,NumInputs+1) # candidate for optimum start
-for (i in 1:NumHidden){
-	b<-0
-	for (k in (1:N)){
-		b<-b+(phidash(d1bar[i,k])^2)*d1[i,k]*HiddenInput[,k]
+for (t in 1:5){ # this is step 9
+	
+# Step 2 #
+	d1<-matrix(0,NumHidden,N)
+	W2<-t(W2) # small issue with R matrices and vectors
+	for (i in 1:N){
+		d1[,i]<-qr.solve(W2,d2bar[i]-b2)	
 	}
-	A<-matrix(0,NumInputs+1,NumInputs+1)
-	for (k in (1:N)){
-		A<-A+(phidash(d1bar[i,k])^2)*HiddenInput[,k]%*%t(HiddenInput[,k])
+	d1[1,]<-(d1[1,]-min(d1[1,]))/(max(d1[1,])-min(d1[1,]))
+	d1[d1==1]<-1-1e-3;d1[d1==0]<-1e-3
+	
+# Step 3 #
+	d1bar<-inversephi(d1)
+	
+# Step 4 # It is like solving a Ax=b problem
+	for (k in 1:NumHidden){ # for each hidden neuron
+		b<-matrix(0,NumInput+1,1)
+		A<-matrix(0,NumInput+1,NumInput+1)
+		for (s in 1:N){
+			us<-c(1,xs[,s])
+			b<-b+(phidash(d1bar[k,s])^2)*d1[k,s]*us
+			A<-A+(phidash(d1bar[k,s])^2)*us%*%t(us)
+		}
+		wk<-solve(A,b)
+		b1[k]<-wk[1,]
+		W1[k,]<-wk[2:(NumInput+1),]
 	}
-	wk<-solve(A+0.0000001*diag(NumInputs+1),b)
-	W1opt[i,]<-wk	
+	
+# Step 5 #
+	z1<-W1%*%xs+b1
+	y1<-phi(z1)
+	
+# Step 6 # Only one output neuron
+	b<-matrix(0,NumHidden+1,1)
+	A<-matrix(0,NumHidden+1,NumHidden+1)
+	for (s in 1:N){
+		us<-c(1,y1[,s])
+		b<-b+(phidash(d2bar[s])^2)*d2[s]*us
+		A<-A+(phidash(d2bar[s])^2)*us%*%t(us)
+	}
+	wk<-solve(A+diag(0.001,NumHidden+1),b) # A may be singular
+	b2<-wk[1,]
+	W2<-wk[2:(NumHidden+1),]
+	
+# Step 7 #
+	z2<-W2%*%y1+b2
+	y2<-phi(z2)
+	
+# Step 8 #
+	J<-sum(t(d2-y2)%*%(d2-y2))/(2*N)
+	if(J<Jopt){
+		Jopt<-J
+		W1opt<-W1
+		b1opt<-b1
+		W2opt<-W2
+		b2opt<-b2	
+	}
 }
 
-## Step 5
-z1<-W1opt%*%HiddenInput
-y1<-phi(z1)
+WeightsHI<-cbind(b1,W1)
+WeightsOH<-t(c(b2,W2)) # W2 is a vector
+################################
+# End of Weight Initialization #
+################################
 
-## Step 6
-W2opt<-matrix(0,NumOutputs,NumHidden+1) # candidate for optimum start
-y1<-rbind(1,y1)
-b<-0
-for (k in (1:N)){
-	b<-b+(phidash(d2bar[k])^2)*d2[k]*y1[,k]
-}
-A<-matrix(0,NumHidden+1,NumHidden+1)
-for (k in (1:N)){
-	A<-A+(phidash(d2bar[k]))^2*y1[,k]%*%t(y1[,k])
-}
-wk<-solve(A+0.0000001*diag(NumHidden+1),b)
-W2opt<-wk	
+############
+# Training #
+############
+
+### Forward pass
+HiddenInputs<-rbind(1,Inputs)
+SumHidden<-WeightsHI%*%HiddenInputs
+HiddenOutputs<-phi(SumHidden)
+OutputInputs<-HiddenOutputs
+SumOutput<-WeightsOH%*%OutputInputs
+Outputs<-phi(SumOutput)
+MSE<-((Targets-Outputs)%*%t(Targets-Outputs))/(2*N)
+
+
