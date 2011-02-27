@@ -16,6 +16,8 @@ NumHidden<-2 # number of hidden neurons
 WeightsOH<-matrix(rnorm(NumOutput*(NumHidden+1),0,1),NumOutput,NumHidden+1) # weights and bias for the output-hidden layer
 WeightsHI<-matrix(rnorm(NumHidden*(NumInput+1),0,1),NumHidden,NumInput+1)  # weights and bias for the hidden-input layer
 N<-length(T) # number of samples
+Lr<-0.1 # learning rate
+Mr<-0.1 # momentum rate
 
 ### Sigmoid Function
 phi<-function(v){
@@ -132,14 +134,43 @@ WeightsOH<-t(c(b2,W2)) # W2 is a vector
 ############
 # Training #
 ############
+DeltaWOH<-matrix(0,NumOutput,NumHidden+1) # weights updates
+DeltaWHI<-matrix(0,NumHidden,NumInput+1)  # weights updates
+PreviousDeltaWOH<-DeltaWOH # storing previous values for momentum
+PreviousDeltaWHI<-DeltaWHI # storing previous values for momentum
 
 ### Forward pass
 HiddenInputs<-rbind(1,Inputs)
 SumHidden<-WeightsHI%*%HiddenInputs
 HiddenOutputs<-phi(SumHidden)
-OutputInputs<-HiddenOutputs
+OutputInputs<-rbind(1,HiddenOutputs)
 SumOutput<-WeightsOH%*%OutputInputs
 Outputs<-phi(SumOutput)
-MSE<-((Targets-Outputs)%*%t(Targets-Outputs))/(2*N)
+MSE<-as.numeric(t(Targets-t(Outputs))%*%(Targets-t(Outputs)))/(2*N)
+
+### Backpropagation
+DeltaO<-(Targets-t(Outputs))*t(Outputs)*(1-t(Outputs)) # the local gradients for each sample
+DeltaH<-matrix(0,NumHidden,N)
+for (s in 1:N){ # hidden layer local gradients for each example 
+	for (i in 1:NumHidden){
+		for (j in 1:NumOutput){ # gotta fix for more neurons later
+			DeltaH[i,s]<-DeltaH[i,s]+DeltaO[s]*WeightsOH[j,i+1] # beware of the bias index!	
+		}
+	}
+}
+for(s in 1:N){ # output-hidden weights updates
+	for (j in 1:NumOutput){
+		for (i in 1:(NumHidden+1)){
+			DeltaWOH[j,i]<-DeltaWOH[j,i]+(Lr*DeltaO[s]*OutputInputs[i,s])/N
+		}	
+	}
+}
+for(s in 1:N){ # hidden-input weights updates
+	for (j in 1:NumHidden){
+		for (i in 1:(NumInput+1)){
+			DeltaWHI[j,i]<-DeltaWHI[j,i]+(Lr*DeltaH[j,s]*HiddenInputs[i,s])/N
+		}	
+	}
+}
 
 
