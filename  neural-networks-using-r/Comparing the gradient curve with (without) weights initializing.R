@@ -255,5 +255,7 @@ for (epoch in 1:NumEpochs){
 par(mfrow=c(2,1))
 plot(GradNorm,main="Gradient",xlab="Epoch",ylab="Gradient", ylim=c(min(GradNorm,GradNorm2),max(GradNorm,GradNorm2)),type='l',col='red')
 lines(GradNorm2,type='l',col='blue',lty=2)
+legend("topright",c("Initialization","No Initialization"),lty=c(1,2),col=c("red","blue"))
 plot(MSE,main="MSE",xlab="Epoch",ylab="MSE", ylim=c(min(MSE,MSE2),max(MSE,MSE2)),type='l',col='red')
 lines(MSE2,type='l',col='blue',lty=2)
+legend("topright",c("Initialization","No Initialization"),lty=c(1,2),col=c("red","blue"))
