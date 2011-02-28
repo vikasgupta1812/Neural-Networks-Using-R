@@ -138,6 +138,7 @@ WeightsOH<-t(c(b2,W2)) # W2 is a vector
 ############
 DeltaWOH<-matrix(0,NumOutput,NumHidden+1) # weights updates
 DeltaWHI<-matrix(0,NumHidden,NumInput+1)  # weights updates
+GradNorm<-rep(0,NumEpochs)
 for (epoch in 1:NumEpochs){
 	PreviousDeltaWOH<-DeltaWOH # storing previous values for momentum
 	PreviousDeltaWHI<-DeltaWHI # storing previous values for momentum
@@ -177,10 +178,17 @@ for (epoch in 1:NumEpochs){
 			}	
 		}
 	}
+	Grad<-c(DeltaWOH,DeltaWHI)/Lr
+	GradNorm[epoch]<-sqrt(t(Grad)%*%Grad)
 	WeightsOH<-WeightsOH+DeltaWOH+Mr*PreviousDeltaWOH
 	WeightsHI<-WeightsHI+DeltaWHI+Mr*PreviousDeltaWHI
 	if(epoch%%100==0){
-		cat("Epoch: ");cat(epoch);cat(" | MSE: ");cat(MSE[epoch]);cat("\n");
+		cat("Epoch: ");cat(epoch);cat(" | MSE: ");cat(MSE[epoch]);cat(" | Gradient: ");cat(GradNorm[epoch]);cat("\n");
 	}
 }
-plot(MSE)
+par(mfrow=c(2,2))
+plot(MSE,main="MSE",xlab="Epoch",ylab="MSE",type='l',col='red')
+plot(GradNorm,main="Gradient",xlab="Epoch",ylab="Gradient",type='l',col='red')
+plot(Targets,t(Outputs),main="Fit",xlab="Targets",ylab="Outputs",pch=16)
+abline(lm(Targets~t(Outputs)),col='red')
+hist(Targets-t(Outputs),main="Error",xlab="Error",ylab="Frequency",col='lightblue')
