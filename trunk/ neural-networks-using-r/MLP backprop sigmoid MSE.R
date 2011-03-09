@@ -7,31 +7,39 @@
 # Samples 
 ##########
 
-I<-rbind(runif(100),runif(100),runif(100))
-T<-matrix(10+2*I[1,]+3*I[2,]+5*I[3,],1,100)
+I<-cbind(runif(100),runif(100),runif(100))
+T<-matrix(10+2*I[,1]+3*I[,2]+5*I[,3],100,1)
+
+#Exclusive XOR
+#I<-cbind(c(0,0,1,1),c(0,1,0,1))
+#T<-cbind(c(0,1,1,0))
 
 #
-# Parameter
-#############
-N<-dim(I)[2] # number of samples
-NumInputs<-dim(I)[1]
-NumHidden<-5
-NumOutputs<-dim(T)[1]
-WeightsHI<-matrix(runif(NumHidden*(NumInputs+1)),NumHidden,(NumInputs+1))
-WeightsOH<-matrix(runif(NumOutputs*(NumHidden+1)),NumOutputs,NumHidden+1)
-Lr<-0.01
-NumEpochs<-100
+# Parameters
+##############
+N<-nrow(I) # number of samples
+NumInputs<-ncol(I)
+NumHidden<-2
+NumOutputs<-ncol(T)
+W1<-matrix(runif(NumHidden*NumInputs),NumInputs,NumHidden)
+b1<-matrix(runif(NumHidden),1,NumHidden)
+W1bar<-rbind(W1,b1)
+W2<-matrix(runif(NumOutputs*NumHidden),NumHidden,NumOutputs)
+b2<-matrix(runif(NumOutputs),1,NumOutputs)
+W2bar<-rbind(W2,b2)
+Lr<-0.05
+NumEpochs<-1000
 
 #
 # Pre-process
 ##############
-Inputs<-matrix(0,NumInputs,N)
-Targets<-matrix(0,NumOutputs,N)
+Inputs<-matrix(0,N,NumInputs)
+Targets<-matrix(0,N,NumOutputs)
 for (i in 1:NumInputs){
-	Inputs[i,]<-0.99*(I[i,]-min(I[i,]))/(max(I[,])-min(I[i,]))+0.001	
+	Inputs[,i]<-0.99*(I[,i]-min(I[,i]))/(max(I[,i])-min(I[,i]))+0.001	
 }
 for (i in 1:NumOutputs){
-	Targets[i,]<-0.99*(T[i,]-min(T[i,]))/(max(T[,])-min(T[i,]))+0.001	
+	Targets[,i]<-0.99*(T[,i]-min(T[,i]))/(max(T[,i])-min(T[,i]))+0.001	
 }
 
 #
@@ -44,38 +52,56 @@ phidash<-function(v) phi(v)*(1-phi(v))
 # Training
 ############
 MSE<-rep(0,NumEpochs)
+Grad<-rep(0,NumEpochs)
+MinGrad<-1
 for (epoch in 1:NumEpochs){
 	for(s in 1:N){ # adjusts are made after each sample
 		# forward pass
-		HiddenInputs<-c(1,Inputs[,s])
-		HiddenInducedFields<-WeightsHI%*%HiddenInputs
+		HiddenInputs<-c(Inputs[s,],1)
+		HiddenInducedFields<-HiddenInputs%*%W1bar
 		HiddenOutputs<-phi(HiddenInducedFields)
-		OutputInputs<-c(1,HiddenOutputs)
-		OutputInducedFields<-WeightsOH%*%OutputInputs
+		OutputInputs<-c(HiddenOutputs,1)
+		OutputInducedFields<-OutputInputs%*%W2bar
 		Outputs<-phi(OutputInducedFields)
 		
 		#backpropagation
-		DeltaO<-(Targets[,k]-Outputs)*Outputs*(1-Outputs) # local gradient for the output neurons
-		DeltaH<-(HiddenOutputs*(1-HiddenOutputs))*WeightsOH[,-1]%*%DeltaO # local gradient for the hidden neurons		
-		#ajeitar a linha acima para mais de uma saida
+		Delta2<-(Targets[s,]-Outputs)*Outputs*(1-Outputs) # local gradient for the output neurons
+		D1<-diag(c(HiddenOutputs*(1-HiddenOutputs))) # activation derivatives
+		Delta1<-D1%*%W2%*%Delta2 # local gradient for the hidden neurons		
+
+		DeltaW2bar<-t(Lr*Delta2%*%OutputInputs)
+		DeltaW1bar<-t(Lr*Delta1%*%HiddenInputs)
 		
-		DeltaWOH<-Lr*kronecker(DeltaO,t(OutputInputs))
-		DeltaWHI<-Lr*kronecker(DeltaH,t(HiddenInputs))
+		W2bar<-W2bar+DeltaW2bar
+		W1bar<-W1bar+DeltaW1bar
 		
-		WeightsOH<-WeightsOH+DeltaWOH
-		WeightsHI<-WeightsHI+DeltaWHI
+		W2<-W2bar[1:NumHidden,];b2<-W2bar[NumHidden+1,]
+		W1<-W1bar[1:NumInputs,];b1<-W1bar[NumInputs+1,]
 	}
 	
 	# simulating outputs
-	HiddenInputs<-rbind(1,Inputs)
-	HiddenInducedFields<-WeightsHI%*%HiddenInputs
-	HiddenOutputs<-phi(HiddenInducedFields)
-	OutputInputs<-rbind(1,HiddenOutputs)
-	OutputInducedFields<-WeightsOH%*%OutputInputs
-	Outputs<-phi(OutputInducedFields)
+	HiddenInputsSim<-cbind(Inputs,1)
+	HiddenInducedFieldsSim<-HiddenInputsSim%*%W1bar
+	HiddenOutputsSim<-phi(HiddenInducedFieldsSim)
+	OutputInputsSim<-cbind(HiddenOutputsSim,1)
+	OutputInducedFieldsSim<-OutputInputsSim%*%W2bar
+	OutputsSim<-phi(OutputInducedFieldsSim)
 	
-	MSE[epoch]<-(Targets-Outputs)%*%t(Targets-Outputs)/(2*N)  ### ajeitar isso depois
+	MSE[epoch]<-t(Targets-OutputsSim)%*%(Targets-OutputsSim)/(2*N)  ### ajeitar isso depois
+	Grad[epoch]<-sqrt(sum(c(DeltaW1bar,DeltaW2bar)^2)/(Lr^2))
+	
+	if(Grad[epoch]<MinGrad){ # Get optimum epoch
+		OptW2bar<-W2bar
+		OptW1bar<-W1bar
+		OptOutputs<-OutputsSim
+		MinGrad<-Grad[epoch]
+		OptEpoch<-epoch
+	}
 		
 }
-
-plot(MSE,type='l')
+par(mfrow=c(2,2))
+plot(MSE,type='l',main='Mean Squared Error',col='red',ylab='MSE',xlab="Epoch")
+plot(Grad,type='l',main="Gradient",col='red',ylab="Gradient",xlab="Epoch")
+plot(Targets,OptOutputs,main='Targets vs. Outputs at \n Best Gradient',ylab="Outputs",xlab="Targets")
+abline(lm(Targets~OptOutputs),lty=2,col='red')
+hist(Targets-OutputsSim,col='palegreen3',main="Errors",xlab="Error")
