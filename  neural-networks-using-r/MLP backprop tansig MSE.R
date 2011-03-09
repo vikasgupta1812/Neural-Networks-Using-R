@@ -37,17 +37,17 @@ NumEpochs<-1000
 Inputs<-matrix(0,N,NumInputs)
 Targets<-matrix(0,N,NumOutputs)
 for (i in 1:NumInputs){
-	Inputs[,i]<-0.99*(I[,i]-min(I[,i]))/(max(I[,i])-min(I[,i]))+0.001	
+	Inputs[,i]<-2*0.99*(I[,i]-min(I[,i]))/(max(I[,i])-min(I[,i]))-1+0.001	
 }
 for (i in 1:NumOutputs){
-	Targets[,i]<-0.99*(T[,i]-min(T[,i]))/(max(T[,i])-min(T[,i]))+0.001	
+	Targets[,i]<-2*0.99*(T[,i]-min(T[,i]))/(max(T[,i])-min(T[,i]))-1+0.001	
 }
 
 #
-# Sigmoid
+# Tansig
 ###########
-phi<-function(v) 1/(1+exp(-v))
-phidash<-function(v) phi(v)*(1-phi(v))
+phi<-function(v) tanh(v)
+phidash<-function(v) 1-(tanh(v))^2
 
 #
 # Training
@@ -57,6 +57,7 @@ Grad<-rep(0,NumEpochs)
 MinGrad<-1
 PreviousDW1bar<-0
 PreviousDW2bar<-0
+
 for (epoch in 1:NumEpochs){
 	for(s in 1:N){ # adjusts are made after each sample
 		# forward pass
@@ -68,8 +69,8 @@ for (epoch in 1:NumEpochs){
 		Outputs<-phi(OutputInducedFields)
 		
 		#backpropagation
-		Delta2<-(Targets[s,]-Outputs)*Outputs*(1-Outputs) # local gradient for the output neurons
-		D1<-diag(c(HiddenOutputs*(1-HiddenOutputs))) # activation derivatives
+		Delta2<-(Targets[s,]-Outputs)*(1-Outputs)*(1+Outputs) # local gradient for the output neurons
+		D1<-diag(c((1-HiddenOutputs)*(1+HiddenOutputs))) # activation derivatives
 		Delta1<-D1%*%W2%*%Delta2 # local gradient for the hidden neurons		
 
 		DeltaW2bar<-t(Lr*Delta2%*%OutputInputs)
@@ -110,4 +111,4 @@ plot(MSE,type='l',main='Mean Squared Error',col='red',ylab='MSE',xlab="Epoch")
 plot(Grad,type='l',main="Gradient",col='red',ylab="Gradient",xlab="Epoch")
 plot(Targets,OptOutputs,main='Targets vs. Outputs at \n Best Gradient',ylab="Outputs",xlab="Targets")
 abline(lm(Targets~OptOutputs),lty=2,col='red')
-hist(Targets-OutputsSim,col='palegreen3',main="Errors",xlab="Error")
+hist(Targets-OptOutputs,col='palegreen3',main="Errors",xlab="Error")
